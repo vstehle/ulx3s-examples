@@ -1,6 +1,6 @@
 .PHONY: all
 .DELETE_ON_ERROR:
-TOPMOD  := blinky
+TOPMOD  := passthru
 VLOGFIL := $(TOPMOD).v
 VCDFILE := $(TOPMOD).vcd
 SIMPROG := $(TOPMOD)_tb
@@ -18,7 +18,7 @@ CFLAGS = -g -Wall -I$(VINC) -I $(VDIRFB)
 # CFLAGS = -g -Wall -faligned-new -I$(VINC) -I $(VDIRFB)
 
 VERILATOR=verilator
-VFLAGS := -O3 -MMD --trace -Wall
+VFLAGS := -O3 -MMD --trace -Wall -Wno-fatal
 
 ## Find the directory containing the Verilog sources.  This is given from
 ## calling: "verilator -V" and finding the VERILATOR_ROOT output line from
@@ -48,7 +48,7 @@ $(VCDFILE): $(SIMPROG)
 ## 
 .PHONY: clean
 clean:
-	rm -rf $(VDIRFB)/ $(SIMPROG) $(VCDFILE) blinky/ $(BINFILE) $(RPTFILE)
+	rm -rf $(VDIRFB)/ $(SIMPROG) $(VCDFILE) passthru/ $(BINFILE) $(RPTFILE)
 	rm -rf passthru.json ulx3s_out.config ulx3s.bit
 
 ##
@@ -71,8 +71,8 @@ ulx3s.bit: ulx3s_out.config
 	ecppack ulx3s_out.config ulx3s.bit
 
 ulx3s_out.config: passthru.json
-	nextpnr-ecp5 --45k --json passthru.json --basecfg ulx3s_empty.config \
-		--lpf ulx3s_v20.lpf \
+	nextpnr-ecp5 --85k --json passthru.json \
+		--lpf ulx3s_v316.lpf \
 		--textcfg ulx3s_out.config 
 
 passthru.json: passthru.ys passthru.v

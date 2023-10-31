@@ -49,14 +49,11 @@ module ulx3s_passthru_wifi(
 	// WiFi additional signaling
 	inout wire wifi_gpio0,
 	// inout wire wifi_gpio2, // ERROR: IO 'wifi_gpio2' is unconstrained in LPF
-	inout wire wifi_gpio5,
-	inout wire wifi_gpio16,
-	inout wire wifi_gpio17,
 
 	// Onboard blinky
 	output wire [7:0] led,
 	input wire [6:0] btn,
-	input wire [1:4] sw,
+	input wire [3:0] sw,
 	output wire oled_csn,
 	output wire oled_clk,
 	output wire oled_mosi,
@@ -119,11 +116,12 @@ parameter [31:0] C_dummy_constant=0;
   wire [1:0] S_prog_in;
   reg  [1:0] R_prog_in; 
   wire [1:0] S_prog_out;
-  reg  [7:0] R_spi_miso;
-  wire S_oled_csn;
   parameter C_prog_release_timeout = 17;  // default 17 2^n * 25MHz timeout for initialization phase
   reg [C_prog_release_timeout:0] R_prog_release = 1'b1;  // timeout that holds lines for reliable entering programming mode
   reg [7:0] R_progn = 1'b0;
+
+  localparam C_cnt_width = 25;  // default 17 2^n * 25MHz timeout for initialization phase
+  reg [(C_cnt_width - 1):0] cnt = 1'b0;
 
   // TX/RX passthru
   assign ftdi_rxd = wifi_txd;
@@ -140,44 +138,29 @@ parameter [31:0] C_dummy_constant=0;
   assign S_prog_in[0] = ftdi_nrts;
   assign S_prog_out = S_prog_in == 2'b10 ? 2'b01 : S_prog_in == 2'b01 ? 2'b10 : 2'b11;
 
-  assign wifi_en = S_prog_out[1];
+  // BTN2 resets ESP32.
+  assign wifi_en = S_prog_out[1] & ~btn[2];
   assign wifi_gpio0 = S_prog_out[0] & btn[0];
 
   // holding BTN0 will hold gpio0 LOW, signal for ESP32 to take control
   //sd_d(0) <= '0' when wifi_gpio0 = '0' else 'Z'; -- gpio2 together with gpio0 to 0
-  //sd_d(2) <= '0' when wifi_gpio0 = '0' else 'Z'; -- wifi gpio12
-  assign sd_d[0] = R_prog_release[(C_prog_release_timeout)] == 1'b0 ? S_prog_out[0] : S_oled_csn == 1'b0 ? R_spi_miso[0] : 1'bZ;
+  assign sd_d[0] = R_prog_release[(C_prog_release_timeout)] == 1'b0 ? S_prog_out[0] : 1'bZ;
   // gpio2 to 0 during programming init
-  // sd_d(2) <= '0' when (S_prog_in(0) xor S_prog_in(1)) = '1' else 'Z'; -- wifi gpio12
-  // sd_d(2) <= '0' when R_prog_release(R_prog_release'high) = '0' else 'Z'; -- wifi gpio12
-  // sd_d(3) <= '1' when R_prog_release(R_prog_release'high) = '0' else 'Z';
-  // sd_clk <= clk_25mhz when R_prog_release(R_prog_release'high) = '0' else 'Z';
   // permanent flashing mode
   // wifi_en <= ftdi_nrts;
   // wifi_gpio0 <= ftdi_ndtr;
-  assign S_oled_csn = wifi_gpio17;
-  assign oled_csn = S_oled_csn;
-  assign oled_clk = sd_clk;  // wifi_gpio14
-  assign oled_mosi = sd_cmd;  // wifi_gpio15
-  assign oled_dc = wifi_gpio16;
-  assign oled_resn = gp[11]; // wifi_gpio25
 
-  // show OLED signals on the LEDs
-  // show SD signals on the LEDs
-  // led(7 downto 0) <= S_oled_csn & R_spi_miso(0) & sd_clk & sd_d(2) & sd_d(3) & sd_cmd & sd_d(0) & sd_d(1); -- beautiful but makes core unreliable
-
-  assign led[7] = wifi_gpio5; // for boards without D22 soldered
+  assign led[7] = 1;
   assign led[6] = S_prog_out[1];  // green LED indicates ESP32 disabled
   assign led[5] =  ~R_prog_release[(C_prog_release_timeout)]; // ESP32 programming start: blinks too short to be visible
+  assign led[4] = btn[2];
+  assign led[3] = btn[1];
+  assign led[2] = ~btn[0];
+  assign led[1] = ~cnt[(C_cnt_width - 1)];
+  assign led[0] = cnt[(C_cnt_width - 1)];
   
-  // assign led[3] = sd_cmd;
-  //led(3) <= sd_d(3); -- sd_d(3) is sd_cs, pullup=NONE in constraints otherwise SD card will prevents esp32 from entering programming mode...
-  //led(2) <= sd_d(2);
-  //led(1) <= sd_d(1);
-  //led(0) <= sd_d(0);
-
   // programming release counter
-  always @(posedge clk_25MHz) begin
+  always @(posedge clk_25mhz) begin
     R_prog_in <= S_prog_in;
     if(S_prog_out == 2'b01 && R_prog_in == 2'b11) begin
       R_prog_release <= {(((C_prog_release_timeout))-((0))+1){1'b0}};
@@ -189,17 +172,12 @@ parameter [31:0] C_dummy_constant=0;
     end
   end
 
-  always @(posedge sd_clk, posedge wifi_gpio17) begin : P1 // gpio17 is OLED CSn
-
-    if(wifi_gpio17 == 1'b1) begin
-      R_spi_miso <= {1'b0,btn}; // sample button state during csn=1
-    end else begin
-      R_spi_miso <= {R_spi_miso[((7)) - 1:0],R_spi_miso[(7)]}; // shift to the left
-    end
+  always @(posedge clk_25mhz) begin
+      cnt <= cnt + 1;
   end
 
   // if user presses BTN0 and BTN1 then pull down PROGRAMN for multiboot
-  always @(posedge clk_25MHz) begin
+  always @(posedge clk_25mhz) begin
     if(btn[0] == 1'b0 && btn[1] == 1'b1) begin
       R_progn <= R_progn + 1;
       // BTN0 BTN1 are pressed

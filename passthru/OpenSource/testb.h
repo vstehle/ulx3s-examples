@@ -29,6 +29,7 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <verilated_vcd_c.h>
+#include <Vpassthru.h>
 
 #define	TBASSERT(TB,A) do { if (!(A)) { (TB).closetrace(); } assert(A); } while(0);
 
@@ -41,7 +42,7 @@ public:
 	TESTB(void) : m_trace(NULL), m_tickcount(0l) {
 		m_core = new VA;
 		Verilated::traceEverOn(true);
-		m_core->i_clk = 0;
+		m_core->clk_25mhz = 0;
 		eval(); // Get our initial values set properly.
 	}
 	virtual ~TESTB(void) {
@@ -80,10 +81,10 @@ public:
 		// before the top of the clock.
 		eval();
 		if (m_trace) m_trace->dump((vluint64_t)(10*m_tickcount-2));
-		m_core->i_clk = 1;
+		m_core->clk_25mhz = 1;
 		eval();
 		if (m_trace) m_trace->dump((vluint64_t)(10*m_tickcount));
-		m_core->i_clk = 0;
+		m_core->clk_25mhz = 0;
 		eval();
 		if (m_trace) {
 			m_trace->dump((vluint64_t)(10*m_tickcount+5));

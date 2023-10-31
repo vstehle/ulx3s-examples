@@ -11,8 +11,8 @@
 
 int	main(int argc, char **argv) {
 	Verilated::commandArgs(argc, argv);
-	TESTB<Vblinky>	*tb
-		= new TESTB<Vblinky>;
+	TESTB<Vpassthru>	*tb
+		= new TESTB<Vpassthru>;
 	tb->opentrace("passthru.vcd");
 	tb->m_core->btn= 0;
 
